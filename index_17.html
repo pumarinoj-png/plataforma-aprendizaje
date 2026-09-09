@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portal de Material y Tareas</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg:#f6f7fb; --card:#ffffff; --border:#e3e6ee; --text:#1c2333; --muted:#6b7280;
+    --primary:#3454d1; --primary-dark:#2740a6; --danger:#c0392b; --ok:#1f9d55;
+    --tag-bg:#eef1fb; --tag-text:#3454d1;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--text); min-height:100vh;
+  }
+  header{
+    background:var(--primary); color:#fff; padding:16px 24px; display:flex; align-items:center;
+    justify-content:space-between; flex-wrap:wrap; gap:8px;
+  }
+  header h1{ font-size:18px; margin:0; font-weight:600; }
+  header .who{ font-size:14px; opacity:.9; }
+  header button.link-btn{
+    background:transparent; border:1px solid rgba(255,255,255,.6); color:#fff;
+    padding:6px 12px; border-radius:6px; cursor:pointer; font-size:13px;
+  }
+  main{ max-width:880px; margin:0 auto; padding:24px 16px 64px; }
+  .hidden{ display:none !important; }
+  .card{
+    background:var(--card); border:1px solid var(--border); border-radius:10px;
+    padding:20px; margin-bottom:18px;
+  }
+  .center-card{ max-width:420px; margin:60px auto; text-align:center; }
+  h2{ font-size:20px; margin-top:0; }
+  h3{ font-size:16px; margin:0 0 4px; }
+  p.desc{ color:var(--muted); font-size:14px; white-space:pre-wrap; }
+  label{ display:block; font-size:13px; color:var(--muted); margin:12px 0 4px; }
+  input[type=text], input[type=email], input[type=password], textarea, select{
+    width:100%; padding:9px 10px; border:1px solid var(--border); border-radius:6px;
+    font-size:14px; font-family:inherit; background:#fff; color:var(--text);
+  }
+  textarea{ min-height:70px; resize:vertical; }
+  button{
+    cursor:pointer; border:none; border-radius:6px; padding:9px 16px; font-size:14px;
+    font-weight:600; background:var(--primary); color:#fff;
+  }
+  button:hover{ background:var(--primary-dark); }
+  button.secondary{ background:#fff; color:var(--primary); border:1px solid var(--primary); }
+  button.secondary:hover{ background:var(--tag-bg); }
+  button.danger{ background:#fff; color:var(--danger); border:1px solid var(--danger); }
+  button.danger:hover{ background:#fdecea; }
+  button.small{ padding:5px 10px; font-size:12px; }
+  .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+  .row > div{ flex:1; min-width:160px; }
+  .tabs{ display:flex; gap:6px; margin-bottom:16px; flex-wrap:wrap; }
+  .tabs button{
+    background:#fff; color:var(--text); border:1px solid var(--border);
+    font-weight:500;
+  }
+  .tabs button.active{ background:var(--primary); color:#fff; border-color:var(--primary); }
+  .tag{
+    display:inline-block; background:var(--tag-bg); color:var(--tag-text); font-size:12px;
+    padding:2px 8px; border-radius:100px; margin:2px 4px 2px 0;
+  }
+  .item-header{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+  .muted{ color:var(--muted); font-size:13px; }
+  .error-msg{ color:var(--danger); font-size:13px; margin-top:8px; }
+  .ok-msg{ color:var(--ok); font-size:13px; margin-top:8px; }
+  .file-link{ display:inline-block; margin-top:6px; font-size:13px; color:var(--primary); text-decoration:none; }
+  .file-link:hover{ text-decoration:underline; }
+  .divider{ border:none; border-top:1px solid var(--border); margin:16px 0; }
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  th, td{ text-align:left; padding:8px 6px; border-bottom:1px solid var(--border); vertical-align:top; }
+  th{ color:var(--muted); font-weight:600; }
+  .pill-done{ background:#e7f7ee; color:var(--ok); padding:2px 8px; border-radius:100px; font-size:12px; }
+  .pill-pending{ background:#fdf3e3; color:#9a6a00; padding:2px 8px; border-radius:100px; font-size:12px; }
+  .question-row{ display:flex; gap:8px; align-items:center; margin-bottom:6px; }
+  .question-row input{ flex:1; }
+  footer.note{ text-align:center; color:var(--muted); font-size:12px; margin-top:30px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Portal de Material y Tareas</h1>
+  <div>
+    <span class="who" id="whoLabel"></span>
+    <button class="link-btn hidden" id="btnLogout">Salir</button>
+  </div>
+</header>
+
+<main>
+
+  <!-- ---------- INICIO ---------- -->
+  <section id="screen-home">
+    <div class="card center-card">
+      <h2>¿Cómo quieres entrar?</h2>
+      <p class="desc">Elige tu tipo de acceso.</p>
+      <div class="row" style="justify-content:center; margin-top:16px;">
+        <button id="btnGoParticipant">Soy participante</button>
+        <button class="secondary" id="btnGoAdmin">Soy administrador</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---------- LOGIN PARTICIPANTE ---------- -->
+  <section id="screen-participant-login" class="hidden">
+    <div class="card center-card">
+      <h2>Acceso participante</h2>
+      <p class="desc">Ingresa el correo con el que fuiste registrado.</p>
+      <label>Correo</label>
+      <input type="email" id="pEmailInput" placeholder="tu@correo.com">
+      <div style="margin-top:14px;">
+        <button id="btnParticipantEnter">Entrar</button>
+        <button class="secondary" id="btnBackHome1">Volver</button>
+      </div>
+      <div id="pLoginMsg" class="error-msg"></div>
+    </div>
+  </section>
+
+  <!-- ---------- PANEL PARTICIPANTE ---------- -->
+  <section id="screen-participant" class="hidden">
+    <div class="card">
+      <h2 id="pWelcome"></h2>
+      <div id="pCategorias"></div>
+    </div>
+
+    <div class="tabs">
+      <button id="tabMaterialesBtn" class="active">Material</button>
+      <button id="tabTareasBtn">Mis tareas</button>
+    </div>
+
+    <div id="panelMateriales">
+      <div id="materialesList"></div>
+      <p class="muted" id="materialesEmpty" style="display:none;">Aún no hay material disponible para tu categoría.</p>
+    </div>
+
+    <div id="panelTareas" class="hidden">
+      <div id="tareasList"></div>
+      <p class="muted" id="tareasEmpty" style="display:none;">Aún no tienes tareas asignadas.</p>
+    </div>
+  </section>
+
+  <!-- ---------- LOGIN ADMIN ---------- -->
+  <section id="screen-admin-login" class="hidden">
+    <div class="card center-card">
+      <h2>Acceso administrador</h2>
+      <label>Clave</label>
+      <input type="password" id="adminPasswordInput" placeholder="Clave de administrador">
+      <div style="margin-top:14px;">
+        <button id="btnAdminEnter">Entrar</button>
+        <button class="secondary" id="btnBackHome2">Volver</button>
+      </div>
+      <div id="aLoginMsg" class="error-msg"></div>
+    </div>
+  </section>
+
+  <!-- ---------- PANEL ADMIN ---------- -->
+  <section id="screen-admin" class="hidden">
+    <div class="tabs">
+      <button id="tabPartBtn" class="active">Participantes</button>
+      <button id="tabMatBtn">Material</button>
+      <button id="tabTarBtn">Tareas</button>
+      <button id="tabRespBtn">Respuestas</button>
+      <button id="tabPassBtn">Cambiar clave</button>
+    </div>
+
+    <!-- Participantes -->
+    <div id="adminPanelPart">
+      <div class="card">
+        <h3>Agregar / editar participante</h3>
+        <div class="row">
+          <div>
+            <label>Correo</label>
+            <input type="email" id="newPartEmail">
+          </div>
+          <div>
+            <label>Nombre</label>
+            <input type="text" id="newPartNombre">
+          </div>
+        </div>
+        <label>Categorías (separadas por coma, ej: cargo:director, sesion:1)</label>
+        <input type="text" id="newPartCategorias" list="categoriasSugeridas">
+        <datalist id="categoriasSugeridas"></datalist>
+        <div style="margin-top:12px;"><button id="btnSavePart">Guardar</button></div>
+        <div id="partMsg"></div>
+      </div>
+      <div class="card">
+        <h3>Participantes registrados</h3>
+        <div id="partTableWrap"></div>
+      </div>
+    </div>
+
+    <!-- Material -->
+    <div id="adminPanelMat" class="hidden">
+      <div class="card">
+        <h3>Subir material</h3>
+        <label>Título</label>
+        <input type="text" id="newMatTitulo">
+        <label>Descripción</label>
+        <textarea id="newMatDesc"></textarea>
+        <label>Categorías (separadas por coma; vacío = visible para todos)</label>
+        <input type="text" id="newMatCategorias" list="categoriasSugeridas">
+        <label>Archivo (opcional)</label>
+        <input type="file" id="newMatArchivo">
+        <div style="margin-top:12px;"><button id="btnSaveMat">Subir</button></div>
+        <div id="matMsg"></div>
+      </div>
+      <div class="card">
+        <h3>Material publicado</h3>
+        <div id="matListWrap"></div>
+      </div>
+    </div>
+
+    <!-- Tareas -->
+    <div id="adminPanelTar" class="hidden">
+      <div class="card">
+        <h3>Crear tarea</h3>
+        <label>Título</label>
+        <input type="text" id="newTarTitulo">
+        <label>Descripción / instrucciones</label>
+        <textarea id="newTarDesc"></textarea>
+        <label>Categorías (separadas por coma; vacío = para todos)</label>
+        <input type="text" id="newTarCategorias" list="categoriasSugeridas">
+        <label>Archivo adjunto (opcional)</label>
+        <input type="file" id="newTarArchivo">
+        <label>Preguntas para el participante</label>
+        <div id="questionsBuilder"></div>
+        <button type="button" class="secondary small" id="btnAddQuestion">+ Agregar pregunta</button>
+        <div style="margin-top:14px;"><button id="btnSaveTar">Crear tarea</button></div>
+        <div id="tarMsg"></div>
+      </div>
+      <div class="card">
+        <h3>Tareas creadas</h3>
+        <div id="tarListWrap"></div>
+      </div>
+    </div>
+
+    <!-- Respuestas -->
+    <div id="adminPanelResp" class="hidden">
+      <div class="card">
+        <label>Filtrar por tarea</label>
+        <select id="respFiltroTarea"><option value="">Todas las tareas</option></select>
+        <div style="margin-top:14px;" id="respTableWrap"></div>
+      </div>
+    </div>
+
+    <!-- Cambiar clave -->
+    <div id="adminPanelPass" class="hidden">
+      <div class="card center-card">
+        <h3>Cambiar clave de administrador</h3>
+        <label>Clave actual</label>
+        <input type="password" id="oldPass">
+        <label>Clave nueva</label>
+        <input type="password" id="newPass">
+        <div style="margin-top:12px;"><button id="btnChangePass">Actualizar clave</button></div>
+        <div id="passMsg"></div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="note">Portal privado — material y tareas por categoría.</footer>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
