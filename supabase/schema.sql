@@ -1,10 +1,7 @@
 -- ============================================================
 --  Esquema de base de datos - Plataforma de material y tareas
---  Ejecutar ESTE ARCHIVO COMPLETO UNA SOLA VEZ en:
---  Supabase → tu proyecto → SQL Editor → New query → pegar → Run
+--  VERSIÓN SUPABASE SIN PGCRYPTO (más simple)
 -- ============================================================
-
-create extension if not exists pgcrypto;
 
 -- ---------------------------------------------------------------
 -- TABLAS
@@ -13,7 +10,7 @@ create extension if not exists pgcrypto;
 create table if not exists participantes (
   email       text primary key,
   nombre      text not null,
-  categorias  text[] not null default '{}',   -- ej: {"cargo:director","sesion:1"}
+  categorias  text[] not null default '{}',
   created_at  timestamptz not null default now()
 );
 
@@ -21,8 +18,8 @@ create table if not exists materiales (
   id            uuid primary key default gen_random_uuid(),
   titulo        text not null,
   descripcion   text default '',
-  archivo_path  text,                          -- ruta dentro del bucket "materiales"
-  categorias    text[] not null default '{}',  -- vacío = visible para todos
+  archivo_path  text,
+  categorias    text[] not null default '{}',
   created_at    timestamptz not null default now()
 );
 
@@ -32,7 +29,7 @@ create table if not exists tareas (
   descripcion   text default '',
   archivo_path  text,
   categorias    text[] not null default '{}',
-  preguntas     jsonb not null default '[]',   -- [{"id":"...","texto":"..."}]
+  preguntas     jsonb not null default '[]',
   created_at    timestamptz not null default now()
 );
 
@@ -41,26 +38,24 @@ create table if not exists respuestas_tareas (
   tarea_id      uuid not null references tareas(id) on delete cascade,
   email         text not null,
   nombre        text not null,
-  respuestas    jsonb not null default '{}',   -- {"<pregunta_id>": "texto de la respuesta"}
+  respuestas    jsonb not null default '{}',
   submitted_at  timestamptz not null default now(),
   unique (tarea_id, email)
 );
 
 create table if not exists admin_settings (
   id             int primary key default 1,
-  password_hash  text not null,
+  password_plain text not null,
   check (id = 1)
 );
 
--- Clave inicial: "cambia-esta-clave"  →  CÁMBIALA apenas termines la instalación
--- (instrucciones en el README, sección "Primer inicio de sesión como admin").
-insert into admin_settings (id, password_hash)
-values (1, crypt('cambia-esta-clave', gen_salt('bf')))
+-- Clave inicial: cambia-esta-clave
+insert into admin_settings (id, password_plain)
+values (1, 'cambia-esta-clave')
 on conflict (id) do nothing;
 
 -- ---------------------------------------------------------------
--- SEGURIDAD: bloqueamos el acceso directo a las tablas.
--- Todo pasa por las funciones (RPC) de abajo.
+-- SEGURIDAD: Row Level Security
 -- ---------------------------------------------------------------
 
 alter table participantes      enable row level security;
@@ -68,12 +63,9 @@ alter table materiales         enable row level security;
 alter table tareas             enable row level security;
 alter table respuestas_tareas  enable row level security;
 alter table admin_settings     enable row level security;
--- Sin políticas = nadie puede leer ni escribir estas tablas directamente
--- desde el navegador. Las funciones "security definer" de abajo son la
--- única puerta de entrada, y cada acción de administrador exige la clave.
 
 -- ---------------------------------------------------------------
--- FUNCIONES PARA PARTICIPANTES (no requieren clave de admin)
+-- FUNCIONES PARA PARTICIPANTES
 -- ---------------------------------------------------------------
 
 create or replace function buscar_participante(p_email text)
@@ -125,13 +117,13 @@ end;
 $$;
 
 -- ---------------------------------------------------------------
--- FUNCIONES DE ADMINISTRADOR (todas exigen p_password)
+-- FUNCIONES DE ADMINISTRADOR
 -- ---------------------------------------------------------------
 
 create or replace function _check_admin(p_password text) returns boolean
 language sql security definer set search_path = public as $$
   select exists (
-    select 1 from admin_settings where id = 1 and password_hash = crypt(p_password, password_hash)
+    select 1 from admin_settings where id = 1 and password_plain = p_password
   );
 $$;
 
@@ -147,7 +139,7 @@ begin
   if not _check_admin(p_password_actual) then
     return false;
   end if;
-  update admin_settings set password_hash = crypt(p_password_nueva, gen_salt('bf')) where id = 1;
+  update admin_settings set password_plain = p_password_nueva where id = 1;
   return true;
 end;
 $$;
@@ -276,31 +268,5 @@ begin
 end;
 $$;
 
--- Aseguramos que las funciones sean invocables desde el cliente (anon key).
 grant usage on schema public to anon, authenticated;
 grant execute on all functions in schema public to anon, authenticated;
-
--- ---------------------------------------------------------------
--- STORAGE (archivos subidos)
--- ---------------------------------------------------------------
-
-insert into storage.buckets (id, name, public)
-values ('materiales', 'materiales', true)
-on conflict (id) do nothing;
-
-drop policy if exists "lectura publica materiales" on storage.objects;
-create policy "lectura publica materiales" on storage.objects
-  for select using (bucket_id = 'materiales');
-
-drop policy if exists "subida publica materiales" on storage.objects;
-create policy "subida publica materiales" on storage.objects
-  for insert with check (bucket_id = 'materiales');
-
--- Nota de seguridad: la "anon key" es pública por diseño en una app sin
--- servidor propio. Con las políticas de arriba, cualquiera que la tenga
--- podría subir un archivo suelto al bucket "materiales", pero NO puede
--- crear ni modificar ninguna fila en participantes/materiales/tareas sin
--- la clave de administrador (eso lo protegen las funciones de arriba), así
--- que un archivo "colado" nunca aparecerá en la interfaz de nadie. Si más
--- adelante quieres blindar también las subidas, el siguiente paso natural
--- es activar Supabase Auth para el panel de administrador.
