@@ -12,6 +12,13 @@ let sesionesCache = [];
 let materialCache = [];
 let tareasCache = [];
 let questionRows = [];
+let editingParticipanteEmail = null; // si no es null, el form de participante está editando en vez de creando
+let participantesCache = [];
+
+// Estado de búsqueda/orden por lista (persiste mientras dura la sesión)
+let partSearch = "", partSort = "nombre";
+let matSearch = "", matSort = "sesion";
+let tarSearch = "", tarSort = "sesion";
 
 /* ---------------------- utilidades ---------------------- */
 
@@ -40,6 +47,31 @@ function fmtFecha(iso) {
 function fileUrl(path) {
   if (!path) return null;
   return sb.storage.from("materiales").getPublicUrl(path).data.publicUrl;
+}
+
+function generarCodigo() {
+  // Código corto, fácil de leer/dictar: 6 caracteres, sin 0/O/1/I para evitar confusión
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let out = "";
+  for (let i = 0; i < 6; i++) out += chars[Math.floor(Math.random() * chars.length)];
+  return out;
+}
+
+// Filtra por texto libre (busca en los campos indicados) y ordena por una key.
+function filterSort(list, searchFields, search, sortKey) {
+  let out = list || [];
+  if (search) {
+    const q = search.toLowerCase();
+    out = out.filter(item =>
+      searchFields.some(f => String(item[f] ?? "").toLowerCase().includes(q))
+    );
+  }
+  if (sortKey) {
+    out = [...out].sort((a, b) =>
+      String(a[sortKey] ?? "").localeCompare(String(b[sortKey] ?? ""), "es", { sensitivity: "base" })
+    );
+  }
+  return out;
 }
 
 function showScreen(id) {
@@ -77,6 +109,7 @@ function wireEvents() {
   // Participant login
   on("btnParticipantEnter", "onclick", participantLogin);
   $("pEmailInput")?.addEventListener("keydown", e => { if (e.key === "Enter") participantLogin(); });
+  $("pCodigoInput")?.addEventListener("keydown", e => { if (e.key === "Enter") participantLogin(); });
 
   // Admin login
   on("btnAdminEnter", "onclick", adminLogin);
@@ -109,6 +142,9 @@ function doLogout() {
   currentParticipant = null;
   adminPassword = null;
   setWho("", false);
+  if ($("pEmailInput")) $("pEmailInput").value = "";
+  if ($("pCodigoInput")) $("pCodigoInput").value = "";
+  if ($("adminPasswordInput")) $("adminPasswordInput").value = "";
   showScreen("screen-home");
 }
 
@@ -116,14 +152,15 @@ function doLogout() {
 
 async function participantLogin() {
   const email = $("pEmailInput").value.trim().toLowerCase();
+  const codigo = $("pCodigoInput").value.trim();
   if (!email) return alert("Ingresa tu correo");
 
   try {
-    const { data } = await sb.rpc("buscar_participante", { p_email: email });
-    if (!data || data.length === 0) return alert("Correo no registrado");
+    const { data } = await sb.rpc("buscar_participante", { p_email: email, p_codigo: codigo || null });
+    if (!data || data.length === 0) return alert("Correo no registrado, o código incorrecto");
 
     const p = data[0];
-    currentParticipant = { email, nombre: p.nombre, cargo: p.cargo, sesiones: p.sesiones };
+    currentParticipant = { email, nombre: p.nombre, cargo: p.cargo, grupo: p.grupo, sesiones: p.sesiones };
     setWho(`${p.nombre} (${p.cargo || "participante"})`, true);
 
     await loadMaterialesParticipante();
@@ -446,7 +483,7 @@ async function adminDeleteSesionDirectly(id) {
 /* --------- Participant Management --------- */
 
 function renderParticipantesEditor() {
-  let out = `<h2>Agregar participante</h2>
+  let out = `<h2 id="partFormTitle">Agregar participante</h2>
     <div class="form-group">
       <label>Correo:</label>
       <input type="email" id="partEmail" placeholder="ejemplo@mail.com">
@@ -460,6 +497,17 @@ function renderParticipantesEditor() {
       <input type="text" id="partCargo" placeholder="director, docente, etc">
     </div>
     <div class="form-group">
+      <label>Grupo (opcional):</label>
+      <input type="text" id="partGrupo" placeholder="Ej: Grupo A, Región Norte, etc">
+    </div>
+    <div class="form-group">
+      <label>Código de acceso (opcional — si lo dejas vacío, ingresa solo con su correo):</label>
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="partCodigo" placeholder="Ej: 7K2XQP">
+        <button type="button" id="btnGenCodigo" class="btn-secondary btn-small" style="white-space:nowrap;">🎲 Generar</button>
+      </div>
+    </div>
+    <div class="form-group">
       <label>Sesiones (selecciona con Ctrl/Cmd):</label>
       <select id="partSesiones" multiple size="5">`;
 
@@ -470,15 +518,25 @@ function renderParticipantesEditor() {
   out += `</select>
     </div>
     <button id="btnSavePart" class="btn-primary">Guardar participante</button>
+    <button id="btnCancelEditPart" class="btn-secondary hidden">Cancelar edición</button>
 
     <hr>
     <h2>Importar varios participantes</h2>
-    <p><em>Pega una lista en formato: email, nombre, cargo (una persona por línea)</em></p>
-    <textarea id="batchImportText" placeholder="usuario1@mail.com, Juan Pérez, director&#10;usuario2@mail.com, María López, docente" rows="6"></textarea>
+    <p><em>Pega una lista, una persona por línea: correo, nombre, cargo, grupo (opcional), código (opcional)</em></p>
+    <textarea id="batchImportText" placeholder="usuario1@mail.com, Juan Pérez, director&#10;usuario2@mail.com, María López, docente, Grupo A, 7K2XQP" rows="6"></textarea>
     <button id="btnBatchImportPart" class="btn-primary">Importar lote</button>
 
     <hr>
     <h2>Participantes existentes</h2>
+    <div class="form-group" style="display:flex; gap:12px; flex-wrap:wrap;">
+      <input type="text" id="partSearchInput" placeholder="🔎 Buscar por nombre, correo, cargo o grupo" style="flex:1; min-width:200px;">
+      <select id="partSortSelect" style="max-width:200px;">
+        <option value="nombre">Ordenar por nombre</option>
+        <option value="email">Ordenar por correo</option>
+        <option value="cargo">Ordenar por cargo</option>
+        <option value="grupo">Ordenar por grupo</option>
+      </select>
+    </div>
     <div id="participantesListContainer"></div>`;
 
   $("partContent").innerHTML = out;
@@ -486,6 +544,13 @@ function renderParticipantesEditor() {
   // Re-wire buttons (they were just recreated via innerHTML)
   on("btnSavePart", "onclick", adminSaveParticipante);
   on("btnBatchImportPart", "onclick", adminBatchImportParticipantes);
+  on("btnGenCodigo", "onclick", () => { $("partCodigo").value = generarCodigo(); });
+  on("btnCancelEditPart", "onclick", cancelEditParticipante);
+
+  $("partSearchInput").value = partSearch;
+  $("partSortSelect").value = partSort;
+  $("partSearchInput").oninput = () => { partSearch = $("partSearchInput").value; renderParticipantesList(); };
+  $("partSortSelect").onchange = () => { partSort = $("partSortSelect").value; renderParticipantesList(); };
 
   loadAndRenderParticipantes();
 }
@@ -493,31 +558,72 @@ function renderParticipantesEditor() {
 async function loadAndRenderParticipantes() {
   try {
     const { data } = await sb.rpc("admin_listar_participantes", { p_password: adminPassword });
-    const participantes = data || [];
-
-    let out = "";
-    for (const p of participantes) {
-      const sesionesNombres = p.sesiones
-        ?.map(id => sesionesCache.find(s => s.id === id)?.nombre || "?")
-        .join(", ") || "(ninguna)";
-
-      out += `<div class="participante-item">
-        <strong>${esc(p.nombre)}</strong> (${esc(p.email)})
-        <br><small>Cargo: ${esc(p.cargo)}, Sesiones: ${sesionesNombres}</small>
-        <button onclick="deleteParticipante('${p.email}')" class="btn-small btn-danger">Eliminar</button>
-      </div>`;
-    }
-
-    $("participantesListContainer").innerHTML = out || "<p>Sin participantes</p>";
+    participantesCache = data || [];
+    renderParticipantesList();
   } catch (e) {
     alert(`Error: ${e.message}`);
   }
+}
+
+function renderParticipantesList() {
+  const lista = filterSort(participantesCache, ["nombre", "email", "cargo", "grupo"], partSearch, partSort);
+
+  let out = "";
+  for (const p of lista) {
+    const sesionesNombres = p.sesiones
+      ?.map(id => sesionesCache.find(s => s.id === id)?.nombre || "?")
+      .join(", ") || "(ninguna)";
+    const tieneCodigo = p.codigo && p.codigo.trim() !== "";
+
+    out += `<div class="participante-item">
+      <strong>${esc(p.nombre)}</strong> (${esc(p.email)}) ${tieneCodigo ? "🔒" : ""}
+      <br><small>Cargo: ${esc(p.cargo) || "(sin cargo)"} · Grupo: ${esc(p.grupo) || "(sin grupo)"} · Sesiones: ${sesionesNombres}</small>
+      <br>
+      <button onclick="editParticipante('${p.email}')" class="btn-small">Editar</button>
+      <button onclick="deleteParticipante('${p.email}')" class="btn-small btn-danger">Eliminar</button>
+    </div>`;
+  }
+
+  $("participantesListContainer").innerHTML = out || "<p>Sin participantes</p>";
+}
+
+function editParticipante(email) {
+  const p = participantesCache.find(x => x.email === email);
+  if (!p) return;
+
+  editingParticipanteEmail = email;
+  $("partFormTitle").textContent = `Editando: ${p.nombre}`;
+  $("partEmail").value = p.email;
+  $("partEmail").disabled = true;
+  $("partNombre").value = p.nombre || "";
+  $("partCargo").value = p.cargo || "";
+  $("partGrupo").value = p.grupo || "";
+  $("partCodigo").value = p.codigo || "";
+  const selectEl = $("partSesiones");
+  Array.from(selectEl.options).forEach(o => { o.selected = (p.sesiones || []).includes(o.value); });
+  $("btnCancelEditPart").classList.remove("hidden");
+  $("partFormTitle").scrollIntoView({ behavior: "smooth" });
+}
+
+function cancelEditParticipante() {
+  editingParticipanteEmail = null;
+  $("partFormTitle").textContent = "Agregar participante";
+  $("partEmail").disabled = false;
+  $("partEmail").value = "";
+  $("partNombre").value = "";
+  $("partCargo").value = "";
+  $("partGrupo").value = "";
+  $("partCodigo").value = "";
+  $("partSesiones").selectedIndex = -1;
+  $("btnCancelEditPart").classList.add("hidden");
 }
 
 async function adminSaveParticipante() {
   const email = $("partEmail").value.trim().toLowerCase();
   const nombre = $("partNombre").value.trim();
   const cargo = $("partCargo").value.trim();
+  const grupo = $("partGrupo").value.trim();
+  const codigo = $("partCodigo").value.trim();
   const selectEl = $("partSesiones");
   const sesiones = Array.from(selectEl.selectedOptions).map(o => o.value);
 
@@ -529,13 +635,12 @@ async function adminSaveParticipante() {
       p_email: email,
       p_nombre: nombre,
       p_cargo: cargo,
+      p_grupo: grupo,
+      p_codigo: codigo,
       p_sesiones: sesiones
     });
     alert("✓ Participante guardado");
-    $("partEmail").value = "";
-    $("partNombre").value = "";
-    $("partCargo").value = "";
-    selectEl.selectedIndex = -1;
+    cancelEditParticipante();
     await loadAndRenderParticipantes();
   } catch (e) {
     alert(`Error: ${e.message}`);
@@ -559,6 +664,8 @@ async function adminBatchImportParticipantes() {
         p_email: partes[0].toLowerCase(),
         p_nombre: partes[1],
         p_cargo: partes[2],
+        p_grupo: partes[3] || "",
+        p_codigo: partes[4] || "",
         p_sesiones: [] // Sin sesiones asignadas en batch
       });
       count++;
@@ -629,6 +736,14 @@ function renderMaterialesEditor() {
 
     <hr>
     <h2>Material existente</h2>
+    <div class="form-group" style="display:flex; gap:12px; flex-wrap:wrap;">
+      <input type="text" id="matSearchInput" placeholder="🔎 Buscar por título o descripción" style="flex:1; min-width:200px;">
+      <select id="matSortSelect" style="max-width:220px;">
+        <option value="sesion">Agrupado por sesión (carpetas)</option>
+        <option value="titulo">Ordenar por título</option>
+        <option value="created_at">Ordenar por fecha (más nuevo primero)</option>
+      </select>
+    </div>
     <div id="materialListContainer"></div>`;
 
   $("matContent").innerHTML = out;
@@ -644,18 +759,25 @@ function renderMaterialesEditor() {
 
   $("btnSaveMat").onclick = adminSaveMaterial;
 
+  $("matSearchInput").value = matSearch;
+  $("matSortSelect").value = matSort;
+  $("matSearchInput").oninput = () => { matSearch = $("matSearchInput").value; loadAndRenderMateriales(); };
+  $("matSortSelect").onchange = () => { matSort = $("matSortSelect").value; loadAndRenderMateriales(); };
+
   loadAndRenderMateriales();
 }
 
 async function loadAndRenderMateriales() {
-  let out = "";
-  const materiales = materialCache || [];
-
-  for (const m of materiales) {
+  const conFolder = (materialCache || []).map(m => {
     const sesion = sesionesCache.find(s => s.id === m.sesion_id);
-    const folder = sesion ? sesion.nombre : "General";
-    const cargosStr = m.cargos?.length > 0 ? m.cargos.join(", ") : "Todos";
+    return { ...m, sesion_nombre: sesion ? sesion.nombre : "General" };
+  });
 
+  let lista = filterSort(conFolder, ["titulo", "descripcion"], matSearch, matSort === "sesion" ? "sesion_nombre" : matSort);
+  if (matSort === "created_at") lista = [...lista].reverse(); // filterSort ordena asc; para fecha queremos lo más nuevo primero
+
+  const renderItem = m => {
+    const cargosStr = m.cargos?.length > 0 ? m.cargos.join(", ") : "Todos";
     let contenido = "";
     if (m.archivo_path) {
       const url = fileUrl(m.archivo_path);
@@ -663,15 +785,27 @@ async function loadAndRenderMateriales() {
     } else if (m.link_externo) {
       contenido = `<a href="${esc(m.link_externo)}" target="_blank" class="btn-link">Ver link</a>`;
     }
-
-    out += `<div class="material-item">
+    return `<div class="material-item">
       <h4>${esc(m.titulo)}</h4>
-      <p><strong>Sesión:</strong> ${esc(folder)}</p>
+      ${matSort !== "sesion" ? `<p><strong>Sesión:</strong> ${esc(m.sesion_nombre)}</p>` : ""}
       <p><small>${esc(m.descripcion)}</small></p>
       <p><small>Visible para: ${cargosStr}</small></p>
       ${contenido}
       <button onclick="deleteMaterial('${m.id}')" class="btn-small btn-danger">Eliminar</button>
     </div>`;
+  };
+
+  let out = "";
+  if (matSort === "sesion") {
+    const porSesion = lista.reduce((acc, m) => {
+      (acc[m.sesion_nombre] ||= []).push(m);
+      return acc;
+    }, {});
+    for (const [folder, items] of Object.entries(porSesion)) {
+      out += `<div class="material-folder"><h3>${esc(folder)}</h3>${items.map(renderItem).join("")}</div>`;
+    }
+  } else {
+    out = lista.map(renderItem).join("");
   }
 
   $("materialListContainer").innerHTML = out || "<p>Sin material</p>";
@@ -781,6 +915,14 @@ function renderTareasEditor() {
 
     <hr>
     <h2>Tareas existentes</h2>
+    <div class="form-group" style="display:flex; gap:12px; flex-wrap:wrap;">
+      <input type="text" id="tarSearchInput" placeholder="🔎 Buscar por título o descripción" style="flex:1; min-width:200px;">
+      <select id="tarSortSelect" style="max-width:220px;">
+        <option value="sesion">Agrupado por sesión (carpetas)</option>
+        <option value="titulo">Ordenar por título</option>
+        <option value="created_at">Ordenar por fecha (más nuevo primero)</option>
+      </select>
+    </div>
     <div id="tareasListContainer"></div>`;
 
   $("tarContent").innerHTML = out;
@@ -790,6 +932,11 @@ function renderTareasEditor() {
 
   $("btnAddQuestion").onclick = () => { addQuestionRow(); renderQuestionsBuilder(); };
   $("btnSaveTar").onclick = adminSaveTarea;
+
+  $("tarSearchInput").value = tarSearch;
+  $("tarSortSelect").value = tarSort;
+  $("tarSearchInput").oninput = () => { tarSearch = $("tarSearchInput").value; loadAndRenderTareas(); };
+  $("tarSortSelect").onchange = () => { tarSort = $("tarSortSelect").value; loadAndRenderTareas(); };
 
   loadAndRenderTareas();
 }
@@ -859,22 +1006,37 @@ async function adminSaveTarea() {
 }
 
 async function loadAndRenderTareas() {
-  let out = "";
-  const tareas = tareasCache || [];
-
-  for (const t of tareas) {
+  const conFolder = (tareasCache || []).map(t => {
     const sesion = sesionesCache.find(s => s.id === t.sesion_id);
-    const folder = sesion ? sesion.nombre : "General";
-    const cargosStr = t.cargos?.length > 0 ? t.cargos.join(", ") : "Todos";
+    return { ...t, sesion_nombre: sesion ? sesion.nombre : "General" };
+  });
 
-    out += `<div class="tarea-item">
+  let lista = filterSort(conFolder, ["titulo", "descripcion"], tarSearch, tarSort === "sesion" ? "sesion_nombre" : tarSort);
+  if (tarSort === "created_at") lista = [...lista].reverse();
+
+  const renderItem = t => {
+    const cargosStr = t.cargos?.length > 0 ? t.cargos.join(", ") : "Todos";
+    return `<div class="tarea-item">
       <h4>${esc(t.titulo)}</h4>
-      <p><strong>Sesión:</strong> ${esc(folder)}</p>
+      ${tarSort !== "sesion" ? `<p><strong>Sesión:</strong> ${esc(t.sesion_nombre)}</p>` : ""}
       <p><small>${esc(t.descripcion)}</small></p>
       <p><small>Visible para: ${cargosStr}</small></p>
       <p><small>Preguntas: ${(t.preguntas || []).length}</small></p>
       <button onclick="deleteTarea('${t.id}')" class="btn-small btn-danger">Eliminar</button>
     </div>`;
+  };
+
+  let out = "";
+  if (tarSort === "sesion") {
+    const porSesion = lista.reduce((acc, t) => {
+      (acc[t.sesion_nombre] ||= []).push(t);
+      return acc;
+    }, {});
+    for (const [folder, items] of Object.entries(porSesion)) {
+      out += `<div class="tarea-folder"><h3>${esc(folder)}</h3>${items.map(renderItem).join("")}</div>`;
+    }
+  } else {
+    out = lista.map(renderItem).join("");
   }
 
   $("tareasListContainer").innerHTML = out || "<p>Sin tareas</p>";
