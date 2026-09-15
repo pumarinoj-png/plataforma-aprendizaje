@@ -39,8 +39,9 @@ function fileUrl(path) {
 
 function showScreen(id) {
   ["screen-home", "screen-participant-login", "screen-participant",
-   "screen-admin-login", "screen-admin", "screen-course-setup"].forEach(s => {
-    $(s).classList.toggle("hidden", s !== id);
+   "screen-admin-login", "screen-admin"].forEach(s => {
+    const el = $(s);
+    if (el) el.classList.toggle("hidden", s !== id);
   });
 }
 
