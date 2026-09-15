@@ -17,6 +17,11 @@ let questionRows = [];
 
 function $(id) { return document.getElementById(id); }
 
+function on(id, evt, handler) {
+  const el = $(id);
+  if (el) el[evt] = handler;
+}
+
 function esc(str) {
   if (str === null || str === undefined) return "";
   return String(str)
@@ -63,52 +68,41 @@ async function init() {
 
 function wireEvents() {
   // Home
-  $("btnGoParticipant").onclick = () => showScreen("screen-participant-login");
-  $("btnGoAdmin").onclick = () => showScreen("screen-admin-login");
-  $("btnBackHome1").onclick = () => showScreen("screen-home");
-  $("btnBackHome2").onclick = () => showScreen("screen-home");
-  $("btnLogout").onclick = doLogout;
+  on("btnGoParticipant", "onclick", () => showScreen("screen-participant-login"));
+  on("btnGoAdmin", "onclick", () => showScreen("screen-admin-login"));
+  on("btnBackHome1", "onclick", () => showScreen("screen-home"));
+  on("btnBackHome2", "onclick", () => showScreen("screen-home"));
+  on("btnLogout", "onclick", doLogout);
 
   // Participant login
-  $("btnParticipantEnter").onclick = participantLogin;
-  $("pEmailInput").addEventListener("keydown", e => { if (e.key === "Enter") participantLogin(); });
+  on("btnParticipantEnter", "onclick", participantLogin);
+  $("pEmailInput")?.addEventListener("keydown", e => { if (e.key === "Enter") participantLogin(); });
 
   // Admin login
-  $("btnAdminEnter").onclick = adminLogin;
-  $("adminPasswordInput").addEventListener("keydown", e => { if (e.key === "Enter") adminLogin(); });
+  on("btnAdminEnter", "onclick", adminLogin);
+  $("adminPasswordInput")?.addEventListener("keydown", e => { if (e.key === "Enter") adminLogin(); });
 
   // Admin tabs
-  $("tabCursoBtn").onclick = () => switchAdminTab("curso");
-  $("tabPartBtn").onclick = () => switchAdminTab("part");
-  $("tabMatBtn").onclick = () => switchAdminTab("mat");
-  $("tabTarBtn").onclick = () => switchAdminTab("tar");
-  $("tabRespBtn").onclick = () => switchAdminTab("resp");
-  $("tabPassBtn").onclick = () => switchAdminTab("pass");
+  on("tabCursoBtn", "onclick", () => switchAdminTab("curso"));
+  on("tabPartBtn", "onclick", () => switchAdminTab("part"));
+  on("tabMatBtn", "onclick", () => switchAdminTab("mat"));
+  on("tabTarBtn", "onclick", () => switchAdminTab("tar"));
+  on("tabRespBtn", "onclick", () => switchAdminTab("resp"));
+  on("tabPassBtn", "onclick", () => switchAdminTab("pass"));
 
-  // Course management
-  $("btnSaveCurso").onclick = adminSaveCurso;
-  $("btnAddSesion").onclick = adminAddSesion;
-  $("btnSaveSesion").onclick = adminSaveSesion;
-  $("btnDeleteSesion").onclick = adminDeleteSesion;
+  // Course, participant, material and task management buttons are created
+  // dynamically inside their tab's render function, which re-wires them
+  // right after inserting the HTML. Nothing to wire here at load time.
 
-  // Participant management
-  $("btnSavePart").onclick = adminSaveParticipante;
-  $("btnBatchImportPart").onclick = adminBatchImportParticipantes;
+  // Password (static, always present)
+  on("btnChangePass", "onclick", adminChangePassword);
 
-  // Material and Task management
-  $("btnSaveMat").onclick = adminSaveMaterial;
-  $("btnSaveTar").onclick = adminSaveTarea;
-  $("btnAddQuestion").onclick = () => { addQuestionRow(); renderQuestionsBuilder(); };
-
-  // Password
-  $("btnChangePass").onclick = adminChangePassword;
-
-  // Participant view
-  $("tabMaterialesBtn").onclick = () => switchParticipantTab("mat");
-  $("tabTareasBtn").onclick = () => switchParticipantTab("tar");
+  // Participant view (static, always present)
+  on("tabMaterialesBtn", "onclick", () => switchParticipantTab("mat"));
+  on("tabTareasBtn", "onclick", () => switchParticipantTab("tar"));
 
   // Filters
-  $("respFiltroTarea").onchange = () => loadAdminRespuestas();
+  on("respFiltroTarea", "onchange", () => loadAdminRespuestas());
 }
 
 function doLogout() {
@@ -488,6 +482,10 @@ function renderParticipantesEditor() {
     <div id="participantesListContainer"></div>`;
 
   $("partContent").innerHTML = out;
+
+  // Re-wire buttons (they were just recreated via innerHTML)
+  on("btnSavePart", "onclick", adminSaveParticipante);
+  on("btnBatchImportPart", "onclick", adminBatchImportParticipantes);
 
   loadAndRenderParticipantes();
 }
