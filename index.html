@@ -1,269 +1,437 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Portal de Material y Tareas</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<style>
-  :root{
-    --bg:#f6f7fb; --card:#ffffff; --border:#e3e6ee; --text:#1c2333; --muted:#6b7280;
-    --primary:#3454d1; --primary-dark:#2740a6; --danger:#c0392b; --ok:#1f9d55;
-    --tag-bg:#eef1fb; --tag-text:#3454d1;
-  }
-  *{box-sizing:border-box;}
-  body{
-    margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    background:var(--bg); color:var(--text); min-height:100vh;
-  }
-  header{
-    background:var(--primary); color:#fff; padding:16px 24px; display:flex; align-items:center;
-    justify-content:space-between; flex-wrap:wrap; gap:8px;
-  }
-  header h1{ font-size:18px; margin:0; font-weight:600; }
-  header .who{ font-size:14px; opacity:.9; }
-  header button.link-btn{
-    background:transparent; border:1px solid rgba(255,255,255,.6); color:#fff;
-    padding:6px 12px; border-radius:6px; cursor:pointer; font-size:13px;
-  }
-  main{ max-width:880px; margin:0 auto; padding:24px 16px 64px; }
-  .hidden{ display:none !important; }
-  .card{
-    background:var(--card); border:1px solid var(--border); border-radius:10px;
-    padding:20px; margin-bottom:18px;
-  }
-  .center-card{ max-width:420px; margin:60px auto; text-align:center; }
-  h2{ font-size:20px; margin-top:0; }
-  h3{ font-size:16px; margin:0 0 4px; }
-  p.desc{ color:var(--muted); font-size:14px; white-space:pre-wrap; }
-  label{ display:block; font-size:13px; color:var(--muted); margin:12px 0 4px; }
-  input[type=text], input[type=email], input[type=password], textarea, select{
-    width:100%; padding:9px 10px; border:1px solid var(--border); border-radius:6px;
-    font-size:14px; font-family:inherit; background:#fff; color:var(--text);
-  }
-  textarea{ min-height:70px; resize:vertical; }
-  button{
-    cursor:pointer; border:none; border-radius:6px; padding:9px 16px; font-size:14px;
-    font-weight:600; background:var(--primary); color:#fff;
-  }
-  button:hover{ background:var(--primary-dark); }
-  button.secondary{ background:#fff; color:var(--primary); border:1px solid var(--primary); }
-  button.secondary:hover{ background:var(--tag-bg); }
-  button.danger{ background:#fff; color:var(--danger); border:1px solid var(--danger); }
-  button.danger:hover{ background:#fdecea; }
-  button.small{ padding:5px 10px; font-size:12px; }
-  .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
-  .row > div{ flex:1; min-width:160px; }
-  .tabs{ display:flex; gap:6px; margin-bottom:16px; flex-wrap:wrap; }
-  .tabs button{
-    background:#fff; color:var(--text); border:1px solid var(--border);
-    font-weight:500;
-  }
-  .tabs button.active{ background:var(--primary); color:#fff; border-color:var(--primary); }
-  .tag{
-    display:inline-block; background:var(--tag-bg); color:var(--tag-text); font-size:12px;
-    padding:2px 8px; border-radius:100px; margin:2px 4px 2px 0;
-  }
-  .item-header{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
-  .muted{ color:var(--muted); font-size:13px; }
-  .error-msg{ color:var(--danger); font-size:13px; margin-top:8px; }
-  .ok-msg{ color:var(--ok); font-size:13px; margin-top:8px; }
-  .file-link{ display:inline-block; margin-top:6px; font-size:13px; color:var(--primary); text-decoration:none; }
-  .file-link:hover{ text-decoration:underline; }
-  .divider{ border:none; border-top:1px solid var(--border); margin:16px 0; }
-  table{ width:100%; border-collapse:collapse; font-size:13px; }
-  th, td{ text-align:left; padding:8px 6px; border-bottom:1px solid var(--border); vertical-align:top; }
-  th{ color:var(--muted); font-weight:600; }
-  .pill-done{ background:#e7f7ee; color:var(--ok); padding:2px 8px; border-radius:100px; font-size:12px; }
-  .pill-pending{ background:#fdf3e3; color:#9a6a00; padding:2px 8px; border-radius:100px; font-size:12px; }
-  .question-row{ display:flex; gap:8px; align-items:center; margin-bottom:6px; }
-  .question-row input{ flex:1; }
-  footer.note{ text-align:center; color:var(--muted); font-size:12px; margin-top:30px; }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portal de Material y Tareas v2</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --color-primary: #3b82f6;
+      --color-primary-dark: #1e40af;
+      --color-success: #10b981;
+      --color-danger: #ef4444;
+      --color-bg: #f3f4f6;
+      --color-border: #d1d5db;
+      --color-text: #1f2937;
+      --color-text-light: #6b7280;
+      --spacing: 16px;
+    }
+
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--color-bg);
+      color: var(--color-text);
+      line-height: 1.6;
+      padding: var(--spacing);
+    }
+
+    .container { max-width: 1200px; margin: 0 auto; }
+
+    /* ===== Screens ===== */
+    .screen { display: none; }
+    .screen:not(.hidden) { display: block; }
+    .hidden { display: none !important; }
+
+    /* ===== Header/Navigation ===== */
+    header {
+      background: white;
+      border-bottom: 2px solid var(--color-border);
+      padding: var(--spacing);
+      margin-bottom: var(--spacing);
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    header h1 {
+      font-size: 28px;
+      margin-bottom: 8px;
+      color: var(--color-primary);
+    }
+
+    .header-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: var(--spacing);
+    }
+
+    #whoLabel {
+      font-size: 14px;
+      color: var(--color-text-light);
+      font-weight: 600;
+    }
+
+    /* ===== Buttons ===== */
+    button {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-weight: 500;
+    }
+
+    .btn-primary {
+      background: var(--color-primary);
+      color: white;
+    }
+    .btn-primary:hover { background: var(--color-primary-dark); }
+
+    .btn-secondary {
+      background: #6b7280;
+      color: white;
+    }
+    .btn-secondary:hover { background: #4b5563; }
+
+    .btn-danger {
+      background: var(--color-danger);
+      color: white;
+    }
+    .btn-danger:hover { background: #dc2626; }
+
+    .btn-small {
+      padding: 6px 10px;
+      font-size: 12px;
+    }
+
+    .btn-link {
+      color: var(--color-primary);
+      text-decoration: none;
+      padding: 8px 12px;
+      display: inline-block;
+      border-radius: 4px;
+      background: rgba(59, 130, 246, 0.1);
+      transition: all 0.2s;
+    }
+    .btn-link:hover {
+      background: rgba(59, 130, 246, 0.2);
+    }
+
+    /* ===== Forms ===== */
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 500;
+      font-size: 14px;
+    }
+
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="url"],
+    input[type="file"],
+    textarea,
+    select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+      transition: border-color 0.2s;
+    }
+
+    input[type="text"]:focus,
+    input[type="email"]:focus,
+    input[type="password"]:focus,
+    input[type="url"]:focus,
+    textarea:focus,
+    select:focus {
+      outline: none;
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 100px;
+    }
+
+    select[multiple] {
+      padding: 6px;
+    }
+
+    /* ===== Tabs ===== */
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      border-bottom: 2px solid var(--color-border);
+      overflow-x: auto;
+    }
+
+    .tab-btn {
+      padding: 10px 16px;
+      background: transparent;
+      color: var(--color-text-light);
+      border: none;
+      border-bottom: 3px solid transparent;
+      cursor: pointer;
+      font-weight: 500;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    .tab-btn.active {
+      color: var(--color-primary);
+      border-bottom-color: var(--color-primary);
+    }
+
+    /* ===== Cards & Sections ===== */
+    .card {
+      background: white;
+      border-radius: 8px;
+      padding: var(--spacing);
+      margin-bottom: var(--spacing);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    hr {
+      border: none;
+      border-top: 1px solid var(--color-border);
+      margin: var(--spacing) 0;
+    }
+
+    h2 {
+      font-size: 20px;
+      margin-bottom: 12px;
+      color: var(--color-text);
+    }
+
+    h3 {
+      font-size: 16px;
+      margin-bottom: 10px;
+      color: var(--color-text);
+    }
+
+    h4 {
+      font-size: 14px;
+      margin-bottom: 6px;
+    }
+
+    /* ===== Participant/Material Items ===== */
+    .material-folder,
+    .tarea-folder {
+      margin-bottom: 24px;
+    }
+
+    .material-folder h3,
+    .tarea-folder h3 {
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--color-primary);
+      margin-bottom: 16px;
+      color: var(--color-primary);
+    }
+
+    .material-item,
+    .tarea-item,
+    .participante-item,
+    .material-item,
+    .sesion-item,
+    .respuesta-item {
+      background: #f9fafb;
+      padding: 12px;
+      border-left: 4px solid var(--color-primary);
+      margin-bottom: 12px;
+      border-radius: 4px;
+    }
+
+    .respuesta-contenido {
+      background: white;
+      padding: 10px;
+      border-radius: 4px;
+      margin-top: 8px;
+      font-size: 13px;
+      color: var(--color-text-light);
+    }
+
+    .question {
+      margin-bottom: 16px;
+    }
+
+    .question label {
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+
+    .question-input {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .question-input input {
+      flex: 1;
+    }
+
+    /* ===== Home Screen ===== */
+    .home-options {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: var(--spacing);
+      margin-top: var(--spacing);
+    }
+
+    .home-option {
+      background: white;
+      border-radius: 8px;
+      padding: var(--spacing);
+      text-align: center;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      transition: all 0.2s;
+    }
+
+    .home-option:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      transform: translateY(-2px);
+    }
+
+    .home-option button {
+      width: 100%;
+      margin-top: 12px;
+    }
+
+    /* ===== Responsive ===== */
+    @media (max-width: 768px) {
+      body { padding: 12px; }
+      .container { padding: 0; }
+      header { padding: 12px; }
+      h1 { font-size: 20px; }
+      .header-bar { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
 </head>
 <body>
-
-<header>
-  <h1>Portal de Material y Tareas</h1>
-  <div>
-    <span class="who" id="whoLabel"></span>
-    <button class="link-btn hidden" id="btnLogout">Salir</button>
-  </div>
-</header>
-
-<main>
-
-  <!-- ---------- INICIO ---------- -->
-  <section id="screen-home">
-    <div class="card center-card">
-      <h2>¿Cómo quieres entrar?</h2>
-      <p class="desc">Elige tu tipo de acceso.</p>
-      <div class="row" style="justify-content:center; margin-top:16px;">
-        <button id="btnGoParticipant">Soy participante</button>
-        <button class="secondary" id="btnGoAdmin">Soy administrador</button>
+  <header>
+    <div class="header-bar">
+      <div>
+        <h1>📚 Portal de Material y Tareas</h1>
+        <small>Plataforma de aprendizaje por sesiones y cargos</small>
+      </div>
+      <div style="text-align: right;">
+        <div id="whoLabel"></div>
+        <button id="btnLogout" class="btn-secondary btn-small" style="margin-top: 8px;">Salir</button>
       </div>
     </div>
-  </section>
+  </header>
 
-  <!-- ---------- LOGIN PARTICIPANTE ---------- -->
-  <section id="screen-participant-login" class="hidden">
-    <div class="card center-card">
-      <h2>Acceso participante</h2>
-      <p class="desc">Ingresa el correo con el que fuiste registrado.</p>
-      <label>Correo</label>
-      <input type="email" id="pEmailInput" placeholder="tu@correo.com">
-      <div style="margin-top:14px;">
-        <button id="btnParticipantEnter">Entrar</button>
-        <button class="secondary" id="btnBackHome1">Volver</button>
-      </div>
-      <div id="pLoginMsg" class="error-msg"></div>
-    </div>
-  </section>
+  <div class="container">
 
-  <!-- ---------- PANEL PARTICIPANTE ---------- -->
-  <section id="screen-participant" class="hidden">
-    <div class="card">
-      <h2 id="pWelcome"></h2>
-      <div id="pCategorias"></div>
-    </div>
-
-    <div class="tabs">
-      <button id="tabMaterialesBtn" class="active">Material</button>
-      <button id="tabTareasBtn">Mis tareas</button>
-    </div>
-
-    <div id="panelMateriales">
-      <div id="materialesList"></div>
-      <p class="muted" id="materialesEmpty" style="display:none;">Aún no hay material disponible para tu categoría.</p>
-    </div>
-
-    <div id="panelTareas" class="hidden">
-      <div id="tareasList"></div>
-      <p class="muted" id="tareasEmpty" style="display:none;">Aún no tienes tareas asignadas.</p>
-    </div>
-  </section>
-
-  <!-- ---------- LOGIN ADMIN ---------- -->
-  <section id="screen-admin-login" class="hidden">
-    <div class="card center-card">
-      <h2>Acceso administrador</h2>
-      <label>Clave</label>
-      <input type="password" id="adminPasswordInput" placeholder="Clave de administrador">
-      <div style="margin-top:14px;">
-        <button id="btnAdminEnter">Entrar</button>
-        <button class="secondary" id="btnBackHome2">Volver</button>
-      </div>
-      <div id="aLoginMsg" class="error-msg"></div>
-    </div>
-  </section>
-
-  <!-- ---------- PANEL ADMIN ---------- -->
-  <section id="screen-admin" class="hidden">
-    <div class="tabs">
-      <button id="tabPartBtn" class="active">Participantes</button>
-      <button id="tabMatBtn">Material</button>
-      <button id="tabTarBtn">Tareas</button>
-      <button id="tabRespBtn">Respuestas</button>
-      <button id="tabPassBtn">Cambiar clave</button>
-    </div>
-
-    <!-- Participantes -->
-    <div id="adminPanelPart">
+    <!-- ===== HOME ===== -->
+    <div id="screen-home" class="screen">
       <div class="card">
-        <h3>Agregar / editar participante</h3>
-        <div class="row">
-          <div>
-            <label>Correo</label>
-            <input type="email" id="newPartEmail">
+        <h2>Bienvenido</h2>
+        <p>Selecciona tu rol para acceder:</p>
+        <div class="home-options">
+          <div class="home-option">
+            <h3>👤 Participante</h3>
+            <p>Accede a tu material y completa tus tareas</p>
+            <button id="btnGoParticipant" class="btn-primary">Ingresar</button>
           </div>
-          <div>
-            <label>Nombre</label>
-            <input type="text" id="newPartNombre">
+          <div class="home-option">
+            <h3>⚙️ Administrador</h3>
+            <p>Gestiona el curso, material y participantes</p>
+            <button id="btnGoAdmin" class="btn-primary">Ingresar</button>
           </div>
         </div>
-        <label>Categorías (separadas por coma, ej: cargo:director, sesion:1)</label>
-        <input type="text" id="newPartCategorias" list="categoriasSugeridas">
-        <datalist id="categoriasSugeridas"></datalist>
-        <div style="margin-top:12px;"><button id="btnSavePart">Guardar</button></div>
-        <div id="partMsg"></div>
-      </div>
-      <div class="card">
-        <h3>Participantes registrados</h3>
-        <div id="partTableWrap"></div>
       </div>
     </div>
 
-    <!-- Material -->
-    <div id="adminPanelMat" class="hidden">
+    <!-- ===== PARTICIPANT LOGIN ===== -->
+    <div id="screen-participant-login" class="screen hidden">
       <div class="card">
-        <h3>Subir material</h3>
-        <label>Título</label>
-        <input type="text" id="newMatTitulo">
-        <label>Descripción</label>
-        <textarea id="newMatDesc"></textarea>
-        <label>Categorías (separadas por coma; vacío = visible para todos)</label>
-        <input type="text" id="newMatCategorias" list="categoriasSugeridas">
-        <label>Archivo (opcional)</label>
-        <input type="file" id="newMatArchivo">
-        <div style="margin-top:12px;"><button id="btnSaveMat">Subir</button></div>
-        <div id="matMsg"></div>
-      </div>
-      <div class="card">
-        <h3>Material publicado</h3>
-        <div id="matListWrap"></div>
+        <h2>Ingresar como participante</h2>
+        <div class="form-group">
+          <label>Tu correo:</label>
+          <input type="email" id="pEmailInput" placeholder="tu@email.com">
+        </div>
+        <button id="btnParticipantEnter" class="btn-primary">Ingresar</button>
+        <button id="btnBackHome1" class="btn-secondary" style="margin-left: 8px;">← Volver</button>
       </div>
     </div>
 
-    <!-- Tareas -->
-    <div id="adminPanelTar" class="hidden">
-      <div class="card">
-        <h3>Crear tarea</h3>
-        <label>Título</label>
-        <input type="text" id="newTarTitulo">
-        <label>Descripción / instrucciones</label>
-        <textarea id="newTarDesc"></textarea>
-        <label>Categorías (separadas por coma; vacío = para todos)</label>
-        <input type="text" id="newTarCategorias" list="categoriasSugeridas">
-        <label>Archivo adjunto (opcional)</label>
-        <input type="file" id="newTarArchivo">
-        <label>Preguntas para el participante</label>
-        <div id="questionsBuilder"></div>
-        <button type="button" class="secondary small" id="btnAddQuestion">+ Agregar pregunta</button>
-        <div style="margin-top:14px;"><button id="btnSaveTar">Crear tarea</button></div>
-        <div id="tarMsg"></div>
+    <!-- ===== PARTICIPANT VIEW ===== -->
+    <div id="screen-participant" class="screen hidden">
+      <div class="tabs">
+        <button id="tabMaterialesBtn" class="tab-btn active">📄 Material</button>
+        <button id="tabTareasBtn" class="tab-btn">✏️ Tareas</button>
       </div>
+
+      <div id="materialContent" class="card"></div>
+      <div id="tareasContent" class="card hidden"></div>
+    </div>
+
+    <!-- ===== ADMIN LOGIN ===== -->
+    <div id="screen-admin-login" class="screen hidden">
       <div class="card">
-        <h3>Tareas creadas</h3>
-        <div id="tarListWrap"></div>
+        <h2>Ingresar como administrador</h2>
+        <div class="form-group">
+          <label>Clave:</label>
+          <input type="password" id="adminPasswordInput" placeholder="Tu clave secreta">
+        </div>
+        <button id="btnAdminEnter" class="btn-primary">Ingresar</button>
+        <button id="btnBackHome2" class="btn-secondary" style="margin-left: 8px;">← Volver</button>
       </div>
     </div>
 
-    <!-- Respuestas -->
-    <div id="adminPanelResp" class="hidden">
-      <div class="card">
-        <label>Filtrar por tarea</label>
-        <select id="respFiltroTarea"><option value="">Todas las tareas</option></select>
-        <div style="margin-top:14px;" id="respTableWrap"></div>
+    <!-- ===== ADMIN VIEW ===== -->
+    <div id="screen-admin" class="screen hidden">
+      <div class="tabs">
+        <button id="tabCursoBtn" class="tab-btn active">🎓 Curso</button>
+        <button id="tabPartBtn" class="tab-btn">👥 Participantes</button>
+        <button id="tabMatBtn" class="tab-btn">📄 Material</button>
+        <button id="tabTarBtn" class="tab-btn">✏️ Tareas</button>
+        <button id="tabRespBtn" class="tab-btn">📊 Respuestas</button>
+        <button id="tabPassBtn" class="tab-btn">🔐 Clave</button>
+      </div>
+
+      <!-- CURSO TAB -->
+      <div id="cursoContent" class="card hidden"></div>
+
+      <!-- PARTICIPANTES TAB -->
+      <div id="partContent" class="card hidden"></div>
+
+      <!-- MATERIAL TAB -->
+      <div id="matContent" class="card hidden"></div>
+
+      <!-- TAREAS TAB -->
+      <div id="tarContent" class="card hidden"></div>
+
+      <!-- RESPUESTAS TAB -->
+      <div id="respContent" class="card hidden">
+        <h2>Respuestas de participantes</h2>
+        <div class="form-group">
+          <label>Filtrar por tarea:</label>
+          <select id="respFiltroTarea">
+            <option value="">Todas</option>
+          </select>
+        </div>
+        <div id="respList"></div>
+      </div>
+
+      <!-- CLAVE TAB -->
+      <div id="passContent" class="card hidden">
+        <h2>Cambiar clave de administrador</h2>
+        <p><em>Tu clave actual es: <code>cambia-esta-clave</code></em></p>
+        <p style="color: var(--color-danger); font-weight: 500; margin: 16px 0;">
+          ⚠️ IMPORTANTE: Cámbiala apenas termines la instalación
+        </p>
+        <button id="btnChangePass" class="btn-primary">Cambiar clave</button>
       </div>
     </div>
 
-    <!-- Cambiar clave -->
-    <div id="adminPanelPass" class="hidden">
-      <div class="card center-card">
-        <h3>Cambiar clave de administrador</h3>
-        <label>Clave actual</label>
-        <input type="password" id="oldPass">
-        <label>Clave nueva</label>
-        <input type="password" id="newPass">
-        <div style="margin-top:12px;"><button id="btnChangePass">Actualizar clave</button></div>
-        <div id="passMsg"></div>
-      </div>
-    </div>
-  </section>
+  </div>
 
-  <footer class="note">Portal privado — material y tareas por categoría.</footer>
-</main>
-
-<script src="app.js"></script>
+  <script src="./app-v2.js"></script>
 </body>
 </html>
